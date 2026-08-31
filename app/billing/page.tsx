@@ -1,0 +1,551 @@
+"use client"
+
+import type React from "react"
+
+import { useState, useEffect } from "react"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ArrowLeft, Search, Filter, Plus, Download, CreditCard, Receipt, LogOut } from "lucide-react"
+import { toast } from "@/components/ui/use-toast"
+import { useRouter } from "next/navigation"
+import AuthGuard from "@/components/auth-guard"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+
+export default function BillingPage() {
+  return (
+    <AuthGuard allowedRoles={["billing", "admin"]}>
+      <BillingManagement />
+    </AuthGuard>
+  )
+}
+
+function BillingManagement() {
+  const router = useRouter()
+  const [searchQuery, setSearchQuery] = useState("")
+  const [isNewInvoiceDialogOpen, setIsNewInvoiceDialogOpen] = useState(false)
+  const [newInvoice, setNewInvoice] = useState({
+    patientId: "",
+    patientName: "",
+    services: "",
+    amount: "",
+    dueDate: "",
+    notes: "",
+  })
+
+  // Sample invoices data
+  const [invoices, setInvoices] = useState([
+    {
+      id: "INV-2025-0112",
+      patient: "John Doe",
+      date: "05/05/2025",
+      amount: "$350.00",
+      status: "Paid",
+    },
+    {
+      id: "INV-2025-0113",
+      patient: "Sarah Johnson",
+      date: "05/05/2025",
+      amount: "$175.00",
+      status: "Pending",
+    },
+    {
+      id: "INV-2025-0114",
+      patient: "Michael Brown",
+      date: "05/04/2025",
+      amount: "$850.00",
+      status: "Insurance",
+    },
+    {
+      id: "INV-2025-0115",
+      patient: "Emily Wilson",
+      date: "05/03/2025",
+      amount: "$425.00",
+      status: "Paid",
+    },
+  ])
+
+  // Load invoices from localStorage on component mount
+  useEffect(() => {
+    const storedInvoices = localStorage.getItem("invoices")
+    if (storedInvoices) {
+      try {
+        setInvoices(JSON.parse(storedInvoices))
+      } catch (error) {
+        console.error("Error parsing stored invoices:", error)
+      }
+    } else {
+      // If no invoices in localStorage, save the default ones
+      localStorage.setItem("invoices", JSON.stringify(invoices))
+    }
+  }, [])
+
+  const handleLogout = () => {
+    localStorage.removeItem("hms_user")
+    toast({
+      title: "Logged out",
+      description: "You have been successfully logged out",
+    })
+    router.push("/login")
+  }
+
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value)
+  }
+
+  const handleFilter = () => {
+    toast({
+      title: "Filter Applied",
+      description: "Invoice list has been filtered based on your criteria",
+    })
+  }
+
+  const handleDownload = () => {
+    toast({
+      title: "Download Started",
+      description: "Invoice data is being downloaded as CSV",
+    })
+  }
+
+  const handleGenerateReport = () => {
+    router.push("/reports")
+    toast({
+      title: "Generating Report",
+      description: "Navigating to financial reports page",
+    })
+  }
+
+  const handleViewInvoice = (invoiceId: string) => {
+    // Find the invoice by ID
+    const invoice = invoices.find((i) => i.id === invoiceId)
+
+    if (invoice) {
+      toast({
+        title: "Invoice Details",
+        description: `Viewing details for invoice ${invoiceId} for ${invoice.patient}`,
+      })
+
+      // Navigate to the invoice detail page
+      router.push(`/billing/${invoiceId}`)
+    }
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    setNewInvoice((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleCreateInvoice = () => {
+    // Validate required fields
+    if (!newInvoice.patientName || !newInvoice.amount) {
+      toast({
+        title: "Missing Information",
+        description: "Please provide at least patient name and amount.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      // Generate a new invoice ID
+      const newId = `INV-2025-${Math.floor(1000 + Math.random() * 9000)}`
+
+      // Create new invoice object
+      const invoice = {
+        id: newId,
+        patient: newInvoice.patientName,
+        date: new Date().toLocaleDateString(),
+        amount: `$${Number.parseFloat(newInvoice.amount).toFixed(2)}`,
+        status: "Pending",
+      }
+
+      // Add to invoices array
+      const updatedInvoices = [invoice, ...invoices]
+      setInvoices(updatedInvoices)
+
+      // Save to localStorage
+      localStorage.setItem("invoices", JSON.stringify(updatedInvoices))
+
+      // Show success message
+      toast({
+        title: "Invoice Created",
+        description: `Invoice ${invoice.id} has been created for ${invoice.patient}`,
+      })
+
+      // Reset form and close dialog
+      setNewInvoice({
+        patientId: "",
+        patientName: "",
+        services: "",
+        amount: "",
+        dueDate: "",
+        notes: "",
+      })
+      setIsNewInvoiceDialogOpen(false)
+    } catch (error) {
+      console.error("Error creating invoice:", error)
+      toast({
+        title: "Error",
+        description: "Failed to create invoice. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Filter invoices based on search query
+  const filteredInvoices = invoices.filter(
+    (invoice) =>
+      invoice.patient.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      invoice.id.toLowerCase().includes(searchQuery.toLowerCase()),
+  )
+
+  return (
+    <div className="flex min-h-screen w-full flex-col">
+      <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
+        <Link href="/" className="flex items-center gap-2 font-semibold">
+          <ArrowLeft className="h-5 w-5" />
+          <span>Back to Dashboard</span>
+        </Link>
+        <div className="ml-auto flex items-center gap-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => toast({ title: "Help", description: "Opening help guide" })}
+          >
+            Help
+          </Button>
+          <Button size="sm">Billing Staff</Button>
+          <Button size="sm" variant="ghost" onClick={handleLogout}>
+            <LogOut className="h-4 w-4" />
+          </Button>
+        </div>
+      </header>
+      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Billing & Payment</h1>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleGenerateReport}>
+              <Receipt className="mr-2 h-4 w-4" />
+              Generate Report
+            </Button>
+            <Button onClick={() => setIsNewInvoiceDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Invoice
+            </Button>
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Revenue Today</CardTitle>
+              <CreditCard className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">$4,325.00</div>
+              <p className="text-xs text-muted-foreground">+8% from yesterday</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Pending Payments</CardTitle>
+              <Receipt className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">$12,580.00</div>
+              <p className="text-xs text-muted-foreground">18 invoices</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Insurance Claims</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">24</div>
+              <p className="text-xs text-muted-foreground">8 pending approval</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Monthly Revenue</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">$98,450.00</div>
+              <p className="text-xs text-muted-foreground">+12% from last month</p>
+            </CardContent>
+          </Card>
+        </div>
+        <div className="flex flex-col gap-4 md:flex-row">
+          <div className="flex-1 space-y-4">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Search invoices..."
+                  className="w-full bg-background pl-8"
+                  value={searchQuery}
+                  onChange={handleSearch}
+                />
+              </div>
+              <Button variant="outline" size="icon" onClick={handleFilter}>
+                <Filter className="h-4 w-4" />
+                <span className="sr-only">Filter</span>
+              </Button>
+              <Button variant="outline" size="icon" onClick={handleDownload}>
+                <Download className="h-4 w-4" />
+                <span className="sr-only">Download</span>
+              </Button>
+            </div>
+            <Tabs defaultValue="invoices">
+              <TabsList>
+                <TabsTrigger value="invoices">Invoices</TabsTrigger>
+                <TabsTrigger value="payments">Payments</TabsTrigger>
+                <TabsTrigger value="claims">Insurance Claims</TabsTrigger>
+              </TabsList>
+              <TabsContent value="invoices" className="border-none p-0 pt-4">
+                <Card>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Invoice ID</TableHead>
+                          <TableHead>Patient</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Amount</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredInvoices.map((invoice) => (
+                          <TableRow key={invoice.id}>
+                            <TableCell>{invoice.id}</TableCell>
+                            <TableCell>{invoice.patient}</TableCell>
+                            <TableCell>{invoice.date}</TableCell>
+                            <TableCell>{invoice.amount}</TableCell>
+                            <TableCell>
+                              <span
+                                className={`text-xs font-medium rounded-full px-2 py-1 ${
+                                  invoice.status === "Paid"
+                                    ? "text-green-500 bg-green-50"
+                                    : invoice.status === "Pending"
+                                      ? "text-yellow-500 bg-yellow-50"
+                                      : "text-blue-500 bg-blue-50"
+                                }`}
+                              >
+                                {invoice.status}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button variant="ghost" size="sm" onClick={() => handleViewInvoice(invoice.id)}>
+                                View
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                  <CardFooter className="flex items-center justify-between border-t p-4">
+                    <div className="text-xs text-muted-foreground">
+                      Showing {filteredInvoices.length} of {invoices.length} invoices
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled
+                        onClick={() =>
+                          toast({ title: "Previous Page", description: "Loading previous page of results" })
+                        }
+                      >
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => toast({ title: "Next Page", description: "Loading next page of results" })}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </CardFooter>
+                </Card>
+              </TabsContent>
+              <TabsContent value="payments" className="border-none p-0 pt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Recent Payments</CardTitle>
+                    <CardDescription>Payments received in the last 30 days</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">There are 86 payments in the last 30 days.</p>
+                    <div className="mt-4">
+                      <Button
+                        onClick={() => {
+                          toast({
+                            title: "Process Payment",
+                            description: "Opening payment processing form",
+                          })
+                          // In a real app, this would open a payment processing form
+                        }}
+                      >
+                        Process New Payment
+                      </Button>
+                    </div>
+                  </CardContent>
+                  <CardFooter>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() =>
+                        toast({
+                          title: "View All Payments",
+                          description: "Loading all payment records",
+                        })
+                      }
+                    >
+                      View All Payments
+                    </Button>
+                  </CardFooter>
+                </Card>
+              </TabsContent>
+              <TabsContent value="claims" className="border-none p-0 pt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Insurance Claims</CardTitle>
+                    <CardDescription>Insurance claims submitted and pending</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">There are 24 active insurance claims.</p>
+                    <div className="mt-4">
+                      <Button
+                        onClick={() => {
+                          toast({
+                            title: "Submit Claim",
+                            description: "Opening insurance claim submission form",
+                          })
+                          // In a real app, this would open an insurance claim form
+                        }}
+                      >
+                        Submit New Claim
+                      </Button>
+                    </div>
+                  </CardContent>
+                  <CardFooter>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() =>
+                        toast({
+                          title: "View All Claims",
+                          description: "Loading all insurance claims",
+                        })
+                      }
+                    >
+                      View All Claims
+                    </Button>
+                  </CardFooter>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </div>
+      </main>
+
+      {/* New Invoice Dialog */}
+      <Dialog open={isNewInvoiceDialogOpen} onOpenChange={setIsNewInvoiceDialogOpen}>
+        <DialogContent className="sm:max-w-[525px]">
+          <DialogHeader>
+            <DialogTitle>Create New Invoice</DialogTitle>
+            <DialogDescription>Enter the invoice details to create a new billing record.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="patientId">Patient ID</Label>
+                <Input
+                  id="patientId"
+                  name="patientId"
+                  value={newInvoice.patientId}
+                  onChange={handleInputChange}
+                  placeholder="e.g., P-2023-0584"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="patientName">Patient Name</Label>
+                <Input
+                  id="patientName"
+                  name="patientName"
+                  value={newInvoice.patientName}
+                  onChange={handleInputChange}
+                  placeholder="e.g., John Doe"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="services">Services</Label>
+              <Input
+                id="services"
+                name="services"
+                value={newInvoice.services}
+                onChange={handleInputChange}
+                placeholder="e.g., Consultation, Lab Tests"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="amount">Amount ($)</Label>
+                <Input
+                  id="amount"
+                  name="amount"
+                  type="number"
+                  value={newInvoice.amount}
+                  onChange={handleInputChange}
+                  placeholder="e.g., 350.00"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dueDate">Due Date</Label>
+                <Input
+                  id="dueDate"
+                  name="dueDate"
+                  type="date"
+                  value={newInvoice.dueDate}
+                  onChange={handleInputChange}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notes</Label>
+              <Input
+                id="notes"
+                name="notes"
+                value={newInvoice.notes}
+                onChange={handleInputChange}
+                placeholder="Additional notes for this invoice"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsNewInvoiceDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateInvoice}>Create Invoice</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
